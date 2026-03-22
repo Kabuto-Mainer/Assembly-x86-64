@@ -1,6 +1,6 @@
 ;===================================================================
 section .data
-    format db '123456789 %d %%', 0x0
+    format db 'Poltorashka say %s %d times a week %d %d %d %d %d', 0x0
     string db 'Meow Meow', 0x0
 
 ;===================================================================
@@ -14,8 +14,13 @@ _start:
 .real_start:
 
     mov rdi, format
-    ; mov rdx, string
-    mov rsi, 10
+    mov rsi, string
+    mov rdx, 1000
+    mov rcx, 1
+    mov r8, 2
+    mov r9, 3
+    push 0x10f
+    push 4
 
     ; push rbx
     ; push rbp
@@ -26,7 +31,8 @@ _start:
     xor r14, r14
 
     mov r12, rsp
-    sub rsp, 200
+    sub r12, 8
+    sub rsp, 10
 
 ;===================================================================
 ;rax - количество символов в буфере (стеке)
@@ -38,7 +44,7 @@ _start:
 
 ;===================================================================
 .next:
-    ; call buffer_control
+    call buffer_control
 
     mov r13b, [rdi]
     inc rdi     ;Сразу прибавляем, что бы потом не прописывать для каждого случая
@@ -100,20 +106,22 @@ section .text
 .spec_string:
 
 .next_spec_string:
-    mov bl, [r15]
-    cmp bl, 0
+    mov r13b, [r15]
+    cmp r13b, 0
     je .next        ;!! end circle
 
-    mov [r12 + rax], bl
+    mov [r12 + rax], r13b
     dec rax
 
     inc r15
-    ; call buffer_control
+    call buffer_control
     jmp .next_spec_string
 
 ;===================================================================
 .spec__b_yte:
     push rcx
+    push rdx
+
     mov rcx, 8
     rol r15b, 1
 
@@ -134,6 +142,7 @@ section .text
     dec rax
     loop .next_spec_byte
 
+    pop rdx
     pop rcx
     jmp .next
 
@@ -154,6 +163,7 @@ section .text
 
     test r15, r15
     js .spec_d_convert
+    jz .spec_d_zero
     jmp .spec_d_main_circle
 
 .spec_d_convert:
@@ -191,12 +201,59 @@ section .text
     pop rbx
     jmp .next
 
+.spec_d_zero:
+    mov [r12 + rax], '0'
+    dec rax
+    jmp .next
+
 ;===================================================================
 .spec__f_loat:
 
 .spec__g_float:
 
 .spec__h_ex:
+    push rbx
+    push rcx
+    push rdx
+
+    mov rbx, 16
+    xor rcx, rcx
+
+.spec_h_main_circle:
+    test r15, r15
+    jz .end_spec_h
+
+    push rax
+    mov rax, r15
+    xor rdx, rdx
+    div rbx
+
+    mov r15, rax
+    pop rax
+
+    push rdx
+    inc rcx
+
+    jmp .spec_h_main_circle
+
+.end_spec_h:
+    pop rdx
+
+    mov rbx, 'a' - 10
+    mov r15, '0'
+    cmp dl, 9
+
+    cmova r15, rbx
+    add dl, r15b
+
+    mov [r12 + rax], dl
+    dec rax
+    loop .end_spec_h
+
+    pop rdx
+    pop rcx
+    pop rbx
+    jmp .next
 
 .spec_error:
 
@@ -228,14 +285,14 @@ end:
 ; get argument to r15
 ; Entry:
 ;       r14 - amount given arguments
-;       r12 - not used stack pointer (with address to ret)
+;       r12 - not used stack pointer
 ; Return:
 ;       r15 - argument
 ;       r14 ++
 ;===================================================================
 get_argument:
     cmp r14, 5
-    ja .get_from_stack
+    jae .get_from_stack
     jmp [.jump_table + r14*8]
 
 section .rodata
@@ -251,7 +308,7 @@ section .rodata
 section .text
 
 .get_from_stack:
-    mov r15, [r12 + 8*(1 + r14 - 5)]
+    mov r15, [r12 + 8*(r14 - 4)]
     jmp .end
 
 .arg_1:
@@ -292,19 +349,21 @@ section .text
 ;===================================================================
 buffer_control:
 
-    mov rbx, rsp
-    sub rbx, r12
-    sub rbx, rax
-    add rbx, 32 ;16 - (ret_address); 16 - (add size)
-    cmp rbx, 0
+    mov rbx, r12
+    add rbx, rax
 
-    ja .add_capacity
+    sub rbx, rsp
+    sub rbx, 32 ;8 - (ret_address); 24 - (add size)
+    test rbx, rbx
+
+    js .add_capacity
     ret
 
 .add_capacity:
     pop rbx
-    sub rsp, 100
+    sub rsp, 20
     jmp rbx
+    ret
 
 
 ; ;===================================================================
