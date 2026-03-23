@@ -6,7 +6,8 @@ section .data
     string db 'Meow Meow', 0x0
     float_value dd 0x4048F5C3 ;3.14
     AMOUNT_STACK_ARG dq 0
-    TEN dd 10.0
+    TEN_FLOAT dd 10.0
+    TEN_DOUBLE dq 10.0
 
 ;===================================================================
 section .text
@@ -188,14 +189,14 @@ section .text
     mov r9d, r8d
     shr r9d, 31
     cmp r9d, 0
-    je .without_sign
+    je .spec_f_without_sign
 
     mov byte [r12 + rax], '-'
     dec rax
 
     and r8d, ~0x80000000 ;clear sign bit
 
-.without_sign:
+.spec_f_without_sign:
 
     movd xmm8, r8d
     mov r9d, r8d
@@ -221,7 +222,7 @@ section .text
     mov rcx, 6
 
 .spec_f_circle:
-    mulss xmm8, [TEN]
+    mulss xmm8, [TEN_FLOAT]
     cvttss2si r8, xmm8
     cvtsi2ss xmm9, r8
 
@@ -243,9 +244,12 @@ section .text
     jmp .next
 
 .spec_f_inf_nan:
-    mov byte [r12 + rax], 'n'
-    mov byte [r12 + rax + 1], 'a'
-    mov byte [r12 + rax + 2], 'n'
+    cmp r10d, 0
+
+    mov r8d, 'nano'
+    mov r9d, 'info'
+    cmove r8d, r9d
+    mov dword [r12 + rax], r8d
     sub rax, 3
 
     pop r11
@@ -258,7 +262,101 @@ section .text
 
     jmp .next
 
+;===================================================================
 .spec__g_float:
+    call get_avx_argument
+
+    push rbx
+    push rcx
+    push rdx
+    push r8
+    push r9
+    push r10
+    push r11
+
+    xor r8, r8
+    movq r8, xmm8
+    mov r9, r8
+    shr r9, 63
+    cmp r9, 0
+    je .spec_g_without_sign
+
+    mov byte [r12 + rax], '-'
+    dec rax
+
+    mov r11, 0x8000000000000000
+    neg r11
+    and r8, r11 ;clear sign bit
+
+.spec_g_without_sign:
+
+    movq xmm8, r8
+    mov r9, r8
+
+    ;аналогично
+    mov r11, 0x7FF0000000000000
+    and r9, r11
+    shr r9, 52
+
+    mov r10, r8
+    mov r11, 0x000FFFFFFFFFFFFF
+    and r10, r11
+
+    cmp r9, 2047
+    je .spec_g_inf_nan
+
+    cvttsd2si r15, xmm8
+    mov r8, r15
+    call print_decimal
+
+    cvtsi2sd xmm9, r8
+    subsd xmm8, xmm9
+
+    mov byte [r12 + rax], '.'
+    dec rax
+
+    mov rcx, 6
+
+.spec_g_circle:
+    mulsd xmm8, [TEN_DOUBLE]
+    cvttsd2si r8, xmm8
+    cvtsi2sd xmm9, r8
+
+    add r8b, '0'
+    mov [r12 + rax], r8b
+    dec rax
+
+    subsd xmm8, xmm9
+    loop .spec_g_circle
+
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rdx
+    pop rcx
+    pop rbx
+
+    jmp .next
+
+.spec_g_inf_nan:
+    cmp r10, 0
+
+    mov r8d, 'onan'
+    mov r9d, 'ofni'
+    cmove r8d, r9d
+    mov dword [r12 + rax], r8d
+    sub rax, 3
+
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rdx
+    pop rcx
+    pop rbx
+
+    jmp .next
 
 ;===================================================================
 .spec__h_ex:
