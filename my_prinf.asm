@@ -1,8 +1,8 @@
 ;===================================================================
-default abs
+default rel
 ;===================================================================
 section .data
-    format db 'Poltorashka say %f %d times a week', 0x0
+    format db 'Poltorashka say %d %d \ntimes a week', 0x0
     string db 'Meow Meow', 0x0
     float_value dd 0x4048F5C3 ;3.14
     AMOUNT_STACK_ARG dq 0
@@ -11,21 +11,22 @@ section .data
 
 ;===================================================================
 section .text
-    global _start
+    ; global _start
+    global my_printf
 
-;===================================================================
-_start:
+;========W===========================================================
+; _start:
     ; jmp end
 
-.real_start:
-    mov rdi, format
-    mov rsi, 1
+my_printf:
+    ; mov rdi, format
+    ; mov rsi, -1
     ; mov rsi, string
     ; mov rdx, 1000
     ; mov rcx, 1
     ; mov r8, 2
     ; mov r9, 3
-    movss xmm0, [float_value]
+    ; movss xmm0, [float_value]
     ; push 0x10f
     ; push 4
 
@@ -58,9 +59,43 @@ _start:
 
     cmp r13b, '%'
     je .specific
+    cmp r13b, '\'
+    je .slesh
     cmp r13b, 0h
     je end
 
+    mov [r12 + rax], r13b
+    dec rax
+    jmp .next
+
+;===================================================================
+.slesh:
+    xor r13, r13
+    mov r13b, [rdi]
+    inc rdi
+
+    cmp r13b, 'n'
+    je .slesh_n
+
+    cmp r13b, 'r'
+    je .slesh_r
+
+    cmp r13b, '\'
+    je .slesh_slesh
+
+    jmp .next
+
+.slesh_n:
+    mov [r12 + rax], 10
+    dec rax
+    jmp .next
+
+.slesh_r:
+    mov [r12 + rax], 15
+    dec rax
+    jmp .next
+
+.slesh_slesh:
     mov [r12 + rax], r13b
     dec rax
     jmp .next
@@ -86,7 +121,9 @@ _start:
     sub r13b, 'b'
     cmp r13b, 6
     ja .spec_error
-    jmp [.jump_table_b_h + r13*8]
+
+    lea rbp, [rel .jump_table_b_h]
+    jmp qword [rbp + r13*8]
 
 ; ;===================================================================
 section .rodata
@@ -108,6 +145,8 @@ section .text
     mov byte [r12 + rax], '%'
     dec rax
     jmp .next
+
+
 
 ;===================================================================
 .spec_string:
@@ -222,7 +261,7 @@ section .text
     mov rcx, 6
 
 .spec_f_circle:
-    mulss xmm8, [TEN_FLOAT]
+    mulss xmm8, [rel TEN_FLOAT]
     cvttss2si r8, xmm8
     cvtsi2ss xmm9, r8
 
@@ -318,7 +357,7 @@ section .text
     mov rcx, 6
 
 .spec_g_circle:
-    mulsd xmm8, [TEN_DOUBLE]
+    mulsd xmm8, [rel TEN_DOUBLE]
     cvttsd2si r8, xmm8
     cvtsi2sd xmm9, r8
 
@@ -424,6 +463,7 @@ end:
     mov rdi, 1
     syscall
 
+    ; ret
     mov rax, 60
     xor rdi, rdi
     syscall
@@ -444,16 +484,22 @@ end:
 get_standard_argument:
     cmp r14d, 5
     jae .get_from_stack
-    jmp [.jump_table + r14d*8]
+
+    push r13
+    xor r13, r13
+    mov r13d, r14d
+    lea rbp, [rel .jump_table]
+    jmp qword [rbp + r13*8]
 
 .get_from_stack:
     push r14
-    mov r14, qword [AMOUNT_STACK_ARG]
+    mov r14, qword [rel AMOUNT_STACK_ARG]
     mov r15, [r12 + 8*r14 + 8]
     inc r14
-    mov qword [AMOUNT_STACK_ARG], r14
+    mov qword [rel AMOUNT_STACK_ARG], r14
     pop r14
 
+    push r13
     jmp .end
 
 .arg_1:
@@ -476,7 +522,8 @@ get_standard_argument:
     mov r15, r9
 
 .end:
-    inc r14d
+    pop r13
+    inc r14
     ret
 
 section .rodata
@@ -508,7 +555,13 @@ get_avx_argument:
 
     cmp r14d, 8
     jae .get_from_stack
-    jmp [.jump_table + r14d*8]
+
+    lea rbp, [rel .jump_table]
+
+    push r13
+    xor r13, r13
+    mov r13d, r14d
+    jmp qword [rbp + r13*8]
 
 .arg_1:
     movaps xmm8, xmm0
@@ -549,9 +602,11 @@ get_avx_argument:
     inc r14
     mov [AMOUNT_STACK_ARG], r14
     pop r14
+    push r13
 
 .end:
-    inc r14d
+    pop r13
+    inc r14
     rol r14, 32
     ret
 
@@ -685,6 +740,9 @@ print_decimal:
     push rcx
     push rdx
     push r8
+    push r9
+
+    mov r9, r15
 
     mov r8, 10
     xor rcx, rcx
@@ -696,9 +754,6 @@ print_decimal:
 
 .convert:
     neg r15
-    mov rdx, '-'
-    push rdx
-    inc rcx
 
 .main_circle:
     test r15, r15
@@ -720,11 +775,22 @@ print_decimal:
 
 ;-------------------
 .end:
+    test r9, r9
+    jns .not_add_minus
+
+    mov rdx, '-'
+    push rdx
+    inc rcx
+.not_add_minus:
+
+.circle:
+
     pop rdx
     mov [r12 + rax], dl
     dec rax
-    loop .end
+    loop .circle
 
+    pop r9
     pop r8
     pop rdx
     pop rcx
