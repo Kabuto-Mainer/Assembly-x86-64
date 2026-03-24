@@ -1,8 +1,28 @@
 ;===================================================================
 default rel
+
+struc BUFFER
+    .rax:   resq 1
+    .rbx:   resq 1
+    .rcx:   resq 1
+    .rdx:   resq 1
+    .rsi:   resq 1
+    .rdi:   resq 1
+    .rbp:   resq 1
+    .rsp:   resq 1
+    .r8:   resq 1
+    .r9:   resq 1
+    .r10:   resq 1
+    .r11:   resq 1
+    .r12:   resq 1
+    .r13:   resq 1
+    .r14:   resq 1
+    .r15:   resq 1
+
+endstruc
 ;===================================================================
 section .data
-    format db 'Poltorashka say %d %d \ntimes a week', 0x0
+    format db 'Poltorashka say times a week',10, 0x0
     string db 'Meow Meow', 0x0
     float_value dd 0x4048F5C3 ;3.14
     AMOUNT_STACK_ARG dq 0
@@ -10,37 +30,40 @@ section .data
     TEN_DOUBLE dq 10.0
 
 ;===================================================================
+section .bss
+REGISTER_SAVE_BUFFER resb BUFFER_size
+
+;===================================================================
 section .text
     ; global _start
     global my_printf
+    extern printf
 
 ;========W===========================================================
-; _start:
-    ; jmp end
-
 my_printf:
-    ; mov rdi, format
-    ; mov rsi, -1
-    ; mov rsi, string
-    ; mov rdx, 1000
-    ; mov rcx, 1
-    ; mov r8, 2
-    ; mov r9, 3
-    ; movss xmm0, [float_value]
-    ; push 0x10f
-    ; push 4
-
-    ; push rbx
-    ; push rbp
-    ; push r10
-    ; push r11
+    mov [REGISTER_SAVE_BUFFER + BUFFER.rax], rax
+    mov [REGISTER_SAVE_BUFFER + BUFFER.rbx], rbx
+    mov [REGISTER_SAVE_BUFFER + BUFFER.rcx], rcx
+    mov [REGISTER_SAVE_BUFFER + BUFFER.rdx], rdx
+    mov [REGISTER_SAVE_BUFFER + BUFFER.rsi], rsi
+    mov [REGISTER_SAVE_BUFFER + BUFFER.rdi], rdi
+    mov [REGISTER_SAVE_BUFFER + BUFFER.rbp], rbp
+    mov [REGISTER_SAVE_BUFFER + BUFFER.rsp], rsp
+    mov  [REGISTER_SAVE_BUFFER + BUFFER.r8], r8
+    mov  [REGISTER_SAVE_BUFFER + BUFFER.r9], r9
+    mov [REGISTER_SAVE_BUFFER + BUFFER.r10], r10
+    mov [REGISTER_SAVE_BUFFER + BUFFER.r11], r11
+    mov [REGISTER_SAVE_BUFFER + BUFFER.r12], r12
+    mov [REGISTER_SAVE_BUFFER + BUFFER.r13], r13
+    mov [REGISTER_SAVE_BUFFER + BUFFER.r14], r14
+    mov [REGISTER_SAVE_BUFFER + BUFFER.r15], r15
 
     xor rax, rax
     xor r14, r14
 
     mov r12, rsp
     sub r12, 8
-    sub rsp, 10
+    sub rsp, 16
 
 ;===================================================================
 ;rax - количество символов в буфере (стеке)
@@ -116,6 +139,9 @@ my_printf:
     je .spec_string
 
     cmp r13b, 'p'
+    je .spec__h_ex
+
+    cmp r13b, 'x'
     je .spec__h_ex
 
     sub r13b, 'b'
@@ -202,6 +228,7 @@ section .text
 
 ;===================================================================
 .spec__d_ecimal:
+    movsxd r15, r15d
     call print_decimal
     jmp .next
 
@@ -451,23 +478,43 @@ section .text
 end:
     call change_strait
 
+    push r12
     mov rsi, r12
     add rsi, rax
-    mov rsp, rsi
+    ; mov rsp, rsi
 
     neg rax
     mov rdx, rax
-    inc rdx
+    ; inc rdx
 
     mov rax, 1
     mov rdi, 1
     syscall
 
-    ; ret
-    mov rax, 60
-    xor rdi, rdi
-    syscall
+    mov rax, [REGISTER_SAVE_BUFFER + BUFFER.rax]
+    mov rbx, [REGISTER_SAVE_BUFFER + BUFFER.rbx]
+    mov rcx, [REGISTER_SAVE_BUFFER + BUFFER.rcx]
+    mov rdx, [REGISTER_SAVE_BUFFER + BUFFER.rdx]
+    mov rsi, [REGISTER_SAVE_BUFFER + BUFFER.rsi]
+    mov rdi, [REGISTER_SAVE_BUFFER + BUFFER.rdi]
+    mov rbp, [REGISTER_SAVE_BUFFER + BUFFER.rbp]
+    mov rsp, [REGISTER_SAVE_BUFFER + BUFFER.rsp]
+    mov  r8, [REGISTER_SAVE_BUFFER + BUFFER.r8]
+    mov  r9, [REGISTER_SAVE_BUFFER + BUFFER.r9]
+    mov r10, [REGISTER_SAVE_BUFFER + BUFFER.r10]
+    mov r11, [REGISTER_SAVE_BUFFER + BUFFER.r11]
+    mov r12, [REGISTER_SAVE_BUFFER + BUFFER.r12]
+    mov r13, [REGISTER_SAVE_BUFFER + BUFFER.r13]
+    mov r14, [REGISTER_SAVE_BUFFER + BUFFER.r14]
+    mov r15, [REGISTER_SAVE_BUFFER + BUFFER.r15]
 
+    pop rbx
+    call printf WRT ..plt
+
+    push rbx
+    mov rbx, [REGISTER_SAVE_BUFFER + BUFFER.rbx]
+
+    ret
 
 
 ;===================================================================
@@ -494,7 +541,7 @@ get_standard_argument:
 .get_from_stack:
     push r14
     mov r14, qword [rel AMOUNT_STACK_ARG]
-    mov r15, [r12 + 8*r14 + 8]
+    mov r15, [r12 + 8*r14 + 16]
     inc r14
     mov qword [rel AMOUNT_STACK_ARG], r14
     pop r14
@@ -551,6 +598,17 @@ section .text
 ;===================================================================
 get_avx_argument:
     dec r14
+
+    push r15
+    mov r15, [rel AMOUNT_STACK_ARG]
+    cmp r15, 0
+    je .not_added_argument
+    dec r15
+    mov [rel AMOUNT_STACK_ARG], r15
+
+.not_added_argument:
+    pop r15
+
     rol r14, 32
 
     cmp r14d, 8
@@ -597,10 +655,10 @@ get_avx_argument:
 
 .get_from_stack:
     push r14
-    mov r14, [AMOUNT_STACK_ARG]
+    mov r14, [rel AMOUNT_STACK_ARG]
     movsd xmm8, [r12 + 8*r14 + 8]
     inc r14
-    mov [AMOUNT_STACK_ARG], r14
+    mov [rel AMOUNT_STACK_ARG], r14
     pop r14
     push r13
 
@@ -696,7 +754,7 @@ change_strait:
     dec r8
     mov r9, rax
     neg r9
-    sub r9, 2
+    sub r9, 1
 
     mov rcx, rax
     neg rcx
