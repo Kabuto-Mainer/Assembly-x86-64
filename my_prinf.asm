@@ -600,6 +600,9 @@ get_avx_argument:
     dec r14
 
     push r15
+    cmp r14d, 5
+    jnae .not_added_argument
+
     mov r15, [rel AMOUNT_STACK_ARG]
     cmp r15, 0
     je .not_added_argument
@@ -656,7 +659,7 @@ get_avx_argument:
 .get_from_stack:
     push r14
     mov r14, [rel AMOUNT_STACK_ARG]
-    movsd xmm8, [r12 + 8*r14 + 8]
+    movsd xmm8, [r12 + 8*r14 + 16]
     inc r14
     mov [rel AMOUNT_STACK_ARG], r14
     pop r14
@@ -854,12 +857,12 @@ print_decimal:
     pop rcx
 
     ret
-
 ;-------------------
 .zero:
     mov [r12 + rax], '0'
     dec rax
 
+    pop r9
     pop r8
     pop rdx
     pop rcx
