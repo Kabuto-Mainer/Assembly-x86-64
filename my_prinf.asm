@@ -22,9 +22,9 @@ struc BUFFER
 endstruc
 ;===================================================================
 section .data
-    format db 'Poltorashka say times a week',10, 0x0
-    string db 'Meow Meow', 0x0
-    float_value dd 0x4048F5C3 ;3.14
+    BIT_SYSTEM db '01'
+    OCTA_SYSTEM db '01234567'
+    HEX_SYSTEM db '0123456789ABCDEF'
     AMOUNT_STACK_ARG dq 0
     TEN_FLOAT dd 10.0
     TEN_DOUBLE dq 10.0
@@ -59,11 +59,12 @@ my_printf:
     mov [REGISTER_SAVE_BUFFER + BUFFER.r15], r15
 
     xor rax, rax
+    mov [AMOUNT_STACK_ARG], rax
     xor r14, r14
 
     mov r12, rsp
     sub r12, 8
-    sub rsp, 16
+    sub rsp, 40
 
 ;===================================================================
 ;rax - количество символов в буфере (стеке)
@@ -192,32 +193,11 @@ section .text
 
 ;===================================================================
 .spec__b_yte:
-    push rcx
-    push rdx
-
-    mov rcx, 8
-    rol r15b, 1
-
-;-------------------
-.next_spec_byte:
-    push r15
-
-    and r15b, 0x1
-    cmp r15b, 0
-
-    pop r15
-    rol r15b, 1
-
-    mov bx, '1'
-    mov dx, '0'
-    cmove bx, dx
-    mov byte [r12 + rax], bl
-
-    dec rax
-    loop .next_spec_byte
-
-    pop rdx
-    pop rcx
+    ; movsxd r15, r15d
+    mov r15d, r15d
+    mov r8, 1
+    lea r9, [rel BIT_SYSTEM]
+    call print_two_system
     jmp .next
 
 ;===================================================================
@@ -230,12 +210,6 @@ section .text
 .spec__d_ecimal:
     movsxd r15, r15d
     call print_decimal
-    jmp .next
-
-;-------------------
-.spec_d_zero:
-    mov [r12 + rax], '0'
-    dec rax
     jmp .next
 
 ;===================================================================
@@ -285,7 +259,7 @@ section .text
     mov byte [r12 + rax], '.'
     dec rax
 
-    mov rcx, 6
+    mov rcx, 10
 
 .spec_f_circle:
     mulss xmm8, [rel TEN_FLOAT]
@@ -426,49 +400,20 @@ section .text
 
 ;===================================================================
 .spec__h_ex:
-    push rbx
-    push rcx
-    push rdx
+    ; movsxd r15, r15d
+    mov r15d, r15d
+    mov r8, 4
+    lea r9, [rel HEX_SYSTEM]
+    call print_two_system
+    jmp .next
 
-    mov rbx, 16
-    xor rcx, rcx
-
-;-------------------
-.spec_h_main_circle:
-    test r15, r15
-    jz .end_spec_h
-
-    push rax
-    mov rax, r15
-    xor rdx, rdx
-    div rbx
-
-    mov r15, rax
-    pop rax
-
-    push rdx
-    inc rcx
-
-    jmp .spec_h_main_circle
-
-;-------------------
-.end_spec_h:
-    pop rdx
-
-    mov rbx, 'a' - 10
-    mov r15, '0'
-    cmp dl, 9
-
-    cmova r15, rbx
-    add dl, r15b
-
-    mov [r12 + rax], dl
-    dec rax
-    loop .end_spec_h
-
-    pop rdx
-    pop rcx
-    pop rbx
+;===================================================================
+.spec__o_cta:
+    ; movsxd r15, r15d
+    mov r15d, r15d
+    mov r8, 3
+    lea r9, [rel OCTA_SYSTEM]
+    call print_two_system
     jmp .next
 
 ;===================================================================
@@ -509,7 +454,7 @@ end:
     mov r15, [REGISTER_SAVE_BUFFER + BUFFER.r15]
 
     pop rbx
-    call printf WRT ..plt
+    ; call printf WRT ..plt
 
     push rbx
     mov rbx, [REGISTER_SAVE_BUFFER + BUFFER.rbx]
@@ -550,23 +495,23 @@ get_standard_argument:
     jmp .end
 
 .arg_1:
-    mov r15, rsi
+    mov r15, [REGISTER_SAVE_BUFFER + BUFFER.rsi]
     jmp .end
 
 .arg_2:
-    mov r15, rdx
+    mov r15, [REGISTER_SAVE_BUFFER + BUFFER.rdx]
     jmp .end
 
 .arg_3:
-    mov r15, rcx
+    mov r15, [REGISTER_SAVE_BUFFER + BUFFER.rcx]
     jmp .end
 
 .arg_4:
-    mov r15, r8
+    mov r15, [REGISTER_SAVE_BUFFER + BUFFER.r8]
     jmp .end
 
 .arg_5:
-    mov r15, r9
+    mov r15, [REGISTER_SAVE_BUFFER + BUFFER.r9]
 
 .end:
     pop r13
@@ -712,7 +657,7 @@ buffer_control:
 
 .add_capacity:
     pop rbx
-    sub rsp, 20
+    sub rsp, 1600
     jmp rbx
     ret
 
@@ -866,5 +811,75 @@ print_decimal:
     pop r8
     pop rdx
     pop rcx
+
+    ret
+
+;===================================================================
+; print number in system pow(2)
+;
+; r8 - pow system (1, 3, 4)
+; r9 - address string with format ('01', '01234567', '0123456789ABCDEF')
+;===================================================================
+print_two_system:
+    push rbx
+    push rcx
+    push rdx
+    push r10
+    push r11
+
+    test r15, r15
+    jz .zero
+
+    mov r10, r15
+    mov rcx, r8
+    mov r8, 1
+    shl r8, cl
+    dec r8
+    xor rdx, rdx
+
+    jmp .main_circle
+
+.main_circle:
+    test r10, r10
+    jz .end
+
+    mov rbx, r10
+    and rbx, r8 ;get value % system
+
+    mov r11b, [r9 + rbx]
+    push r11
+    shr r10, cl
+    inc rdx
+
+    jmp .main_circle
+
+;-------------------
+.end:
+    mov rcx, rdx
+
+.circle:
+    pop rdx
+
+    mov [r12 + rax], dl
+    dec rax
+    loop .circle
+
+    pop r11
+    pop r10
+    pop rdx
+    pop rcx
+    pop rbx
+
+    ret
+;-------------------
+.zero:
+    mov [r12 + rax], '0'
+    dec rax
+
+    pop r11
+    pop r10
+    pop rdx
+    pop rcx
+    pop rbx
 
     ret
