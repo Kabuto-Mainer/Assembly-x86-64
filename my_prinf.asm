@@ -344,6 +344,10 @@ section .text
 
     cmp r9, 2047
     je .spec_g_inf_nan
+    cmp r9, 0
+    je .spec_g_inf_nan
+    cmp r9,
+
 
     cvttsd2si r15, xmm8
     mov r8, r15
@@ -382,11 +386,17 @@ section .text
 .spec_g_inf_nan:
     cmp r10, 0
 
-    mov r8d, 'onan'
-    mov r9d, 'ofni'
+    mov r8d, 'nan'
+    mov r9d, 'fni'
     cmove r8d, r9d
-    mov dword [r12 + rax], r8d
+    mov dword [r12 + rax - 1], r8d
     sub rax, 3
+;
+;     mov [r12 + rax], 'i'
+;     mov [r12 + rax - 1], 'n'
+;     mov [r12 + rax - 2], 'f'
+
+    ; sub rax, 3
 
     pop r11
     pop r10
@@ -423,6 +433,12 @@ section .text
 end:
     call change_strait
 
+    xor r15, r15
+    mov r15d, r14d
+    rol r14, 32
+    add r15d, r14d
+    mov [AMOUNT_STACK_ARG], r15
+
     push r12
     mov rsi, r12
     add rsi, rax
@@ -454,10 +470,11 @@ end:
     mov r15, [REGISTER_SAVE_BUFFER + BUFFER.r15]
 
     pop rbx
-    ; call printf WRT ..plt
+    call printf WRT ..plt
 
     push rbx
     mov rbx, [REGISTER_SAVE_BUFFER + BUFFER.rbx]
+    mov rax, [AMOUNT_STACK_ARG]
 
     ret
 
